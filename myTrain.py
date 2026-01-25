@@ -112,7 +112,9 @@ def depthfusion_train(depth_augment_train_loader, model, optimizer, epoch, test_
     save_path = (opt.train_save)
     if not os.path.exists(save_path):
         os.makedirs(save_path)
+
     torch.save(model.state_dict(), save_path +str(epoch)+ 'PolypPVT.pth')
+    print("save model to", save_path + str(epoch), 'PolypPVT.pth')
     # choose the best model
     
     global dict_plot
