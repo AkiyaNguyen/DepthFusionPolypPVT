@@ -111,10 +111,10 @@ def depthfusion_train(depth_augment_train_loader, model, optimizer, epoch, test_
     
     global dict_plot
    
-    test1path = './dataset/TestDataset/'
+    # test1path = './dataset/TestDataset/'
     if (epoch + 1) % 1 == 0:
         for dataset in ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']:
-            dataset_dice = test(model, test1path, dataset)
+            dataset_dice = test(model, test_path, dataset)
             logging.info('epoch: {}, dataset: {}, dice: {}'.format(epoch, dataset, dataset_dice))
             print(dataset, ': ', dataset_dice)
             dict_plot[dataset].append(dataset_dice)
