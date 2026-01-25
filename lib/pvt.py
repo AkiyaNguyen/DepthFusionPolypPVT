@@ -224,8 +224,8 @@ class DepthBranch(nn.Module):
             nn.Conv2d(6, 16, kernel_size=2, stride=2),
             nn.ReLU()
         )
-        self.conv3x3s = nn.ModuleList([nn.Conv2d(16, 16, kernel_size=3, padding=1, stride=2) for _ in range(3)]) ## output size is halved each time
-        self.fuse_with_rgb = nn.ModuleList([nn.Conv2d(16 + channel, channel, kernel_size=1) for _ in range(3)])
+        self.conv3x3s: nn.ModuleList = nn.ModuleList([nn.Conv2d(16, 16, kernel_size=3, padding=1, stride=2) for _ in range(3)]) ## output size is halved each time
+        self.fuse_with_rgb: nn.ModuleList = nn.ModuleList([nn.Conv2d(16 + channel, channel, kernel_size=1) for _ in range(3)])
 
         # self.conv1x1s = [nn.Conv2d(channel, channel, kernel_size=1)] * 3
         
@@ -233,8 +233,23 @@ class DepthFusePolypPVT(nn.Module):
     def __init__(self, channel=32):
         super(DepthFusePolypPVT, self).__init__()
         self.polyp_pvt = PolypPVT(channel)
-        self.depth_branch = DepthBranch(channel)
+        self.depth_branch = DepthBranch(channel) 
+        for m in self.depth_branch.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
+        # Bước 2: Ghi đè (Override) khởi tạo Zero cho riêng các lớp Fusion Gate
+        # Đây là các lớp tạo ra đầu vào cho hàm Tanh
+        for m in self.depth_branch.fuse_with_rgb:
+            nn.init.constant_(m.weight, 0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+                
     def forward(self, x, depth):
         # backbone
         depth = self.depth_branch.conv1block(depth)
@@ -264,7 +279,7 @@ class DepthFusePolypPVT(nn.Module):
             depth = conv3x3(depth) ## exchange local information
             concate = torch.cat((depth, encode_feature), dim=1) ## channel-wise concat
             fused = fuse_with_rgb(concate) ## exchange info between depth and rgb same shape as encode_feature
-            encode_feature  = encode_feature + nn.Tanh()(fused) * encode_feature ## attention gate mechanism by depth
+            encode_feature  = encode_feature + torch.tanh(fused) * encode_feature ## attention gate mechanism by depth
             fuse_branch.append(encode_feature)
 
         x2_t, x3_t, x4_t = fuse_branch
