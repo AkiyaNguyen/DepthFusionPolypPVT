@@ -65,9 +65,26 @@ def test(model, path, dataset, device='cuda'):
 
     return DSC / num1
 
+def test_between_epoch(model, test_path, epoch):
+    all_dataset_dice = []
+    for dataset in ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']:
+        dataset_dice = test(model, test_path, dataset, device=device)
+        all_dataset_dice.append(dataset_dice)
+        logging.info('epoch: {}, dataset: {}, dice: {}'.format(epoch, dataset, dataset_dice))
+        print(dataset, ': ', dataset_dice)
+        dict_plot[dataset].append(dataset_dice)
 
+    meandice = np.mean(all_dataset_dice)
+    print('Mean Dice: ', meandice)
+    # meandice = test(model, test_path, 'test', device=device)
+    # dict_plot['test'].append(meandice)
+    return meandice
 
 def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, optimizer, epoch, test_path, device='cuda'):
+    save_path = (opt.train_save)
+
+    if epoch == 1:
+        test_between_epoch(model, test_path, epoch)
     model.train()
     # model.freeze_pvt(True)
 
@@ -112,7 +129,7 @@ def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, opti
                   format(datetime.now(), epoch, opt.epoch, i, total_step,
                          loss_P2_record.show()))
     # save model 
-    save_path = (opt.train_save)
+
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -124,18 +141,7 @@ def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, opti
    
     # test1path = './dataset/TestDataset/'
     if (epoch + 1) % 1 == 0:
-        all_dataset_dice = []
-        for dataset in ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']:
-            dataset_dice = test(model, test_path, dataset, device=device)
-            all_dataset_dice.append(dataset_dice)
-            logging.info('epoch: {}, dataset: {}, dice: {}'.format(epoch, dataset, dataset_dice))
-            print(dataset, ': ', dataset_dice)
-            dict_plot[dataset].append(dataset_dice)
-
-        meandice = np.mean(all_dataset_dice)
-        print('Mean Dice: ', meandice)
-        # meandice = test(model, test_path, 'test', device=device)
-        # dict_plot['test'].append(meandice)
+        meandice = test_between_epoch(model, test_path, epoch)
         if meandice > best:
             best = meandice
             torch.save(model.state_dict(), save_path + 'PolypPVT.pth')
