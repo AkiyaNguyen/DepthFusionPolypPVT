@@ -184,6 +184,8 @@ class PolypPVT(nn.Module):
 
     def forward(self, x):
 
+        # print("x min and max is: ",x.min(), x.max())
+
         # backbone
         pvt = self.backbone(x)
         x1 = pvt[0]
@@ -191,15 +193,34 @@ class PolypPVT(nn.Module):
         x3 = pvt[2]
         x4 = pvt[3]
         
+        
+        # print("check x1, x2, x3, x4")
+        
+        
+        # print("     x1.min, max = ", x1.min(), x1.max())
+        # print("     x2.min, max = ", x2.min(), x2.max())
+        # print("     x3.min, max = ", x3.min(), x3.max())
+        # print("     x4.min, max = ", x4.min(), x4.max())
+        
+        
         # CIM
         x1 = self.ca(x1) * x1 # channel attention
         cim_feature = self.sa(x1) * x1 # spatial attention
 
 
+
+        
+
         # CFM
         x2_t = self.Translayer2_1(x2)  
         x3_t = self.Translayer3_1(x3)  
         x4_t = self.Translayer4_1(x4)  
+
+        
+        # print("x2_t.min, max = ", x2_t.min(), x2_t.max())
+        # print("x3_t.min, max = ", x3_t.min(), x3_t.max())
+        # print("x4_t.min, max = ", x4_t.min(), x4_t.max())
+
         cfm_feature = self.CFM(x4_t, x3_t, x2_t)
 
         # SAM
@@ -236,7 +257,18 @@ class DepthFusePolypPVT(nn.Module):
         self.depth_branch = DepthBranch(channel) 
         
         
+    def freeze_pvt(self, freeze=True):
+        for name, param in self.named_parameters():
+            if 'depth_branch' in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
         
+        if freeze:
+            print("---> Backbone & Decoder: FREEZING")
+        else:
+            print("---> Backbone & Decoder: UNFREEZING")
+
     def init_param(self, polyppvt_model_pth=None, total_model_pth=None, device='cuda'):
         if total_model_pth is not None:
             self.load_state_dict(torch.load(total_model_pth, map_location=device))
@@ -247,24 +279,27 @@ class DepthFusePolypPVT(nn.Module):
             self.depth_initialize()
 
     def depth_initialize(self):
-        for m in self.depth_branch.modules():
+        for m in self.depth_branch.conv1block.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+                if m.bias is not None: nn.init.constant_(m.bias, 0)
 
-        # Bước 2: Ghi đè (Override) khởi tạo Zero cho riêng các lớp Fusion Gate
-        # Đây là các lớp tạo ra đầu vào cho hàm Tanh
+        # 2. Khởi tạo conv3x3s (Tránh việc tạo ra giá trị quá lớn)
+        for m in self.depth_branch.conv3x3s:
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None: nn.init.constant_(m.bias, 0)
+
+        # 3. QUAN TRỌNG NHẤT: Ép các lớp Fusion về 0 tuyệt đối
         for m in self.depth_branch.fuse_with_rgb:
-            nn.init.constant_(m.weight, 0)
+            nn.init.zeros_(m.weight) # Dùng zeros_ cho chắc chắn
             if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+                nn.init.zeros_(m.bias)
                 
     def forward(self, x, depth):
         # backbone
+        
+        # print("x min and max is: ",x.min(), x.max())
+
         depth = self.depth_branch.conv1block(depth)
 
         pvt = self.polyp_pvt.backbone(x)
@@ -273,6 +308,13 @@ class DepthFusePolypPVT(nn.Module):
         x3 = pvt[2]
         x4 = pvt[3]
 
+        # print("check x1, x2, x3, x4")
+        
+        
+        # print("     x1.min, max = ", x1.min(), x1.max())
+        # print("     x2.min, max = ", x2.min(), x2.max())
+        # print("     x3.min, max = ", x3.min(), x3.max())
+        # print("     x4.min, max = ", x4.min(), x4.max())
         
         
         # CIM
@@ -286,16 +328,30 @@ class DepthFusePolypPVT(nn.Module):
         x4_t = self.polyp_pvt.Translayer4_1(x4)  
         all_encoder_features = [x2_t, x3_t, x4_t]
 
+        # print("before: ")
+        
+        # print("     x2_t.min, max = ", x2_t.min(), x2_t.max())
+        # print("     x3_t.min, max = ", x3_t.min(), x3_t.max())
+        # print("     x4_t.min, max = ", x4_t.min(), x4_t.max())
         # fuse depth features
         fuse_branch = []
-        for conv3x3, fuse_with_rgb, encode_feature in zip(self.depth_branch.conv3x3s, self.depth_branch.fuse_with_rgb, all_encoder_features):
+        for id, conv3x3, fuse_with_rgb, encode_feature in zip(range(len(all_encoder_features)), self.depth_branch.conv3x3s, self.depth_branch.fuse_with_rgb, all_encoder_features):
             depth = conv3x3(depth) ## exchange local information
             concate = torch.cat((depth, encode_feature), dim=1) ## channel-wise concat
             fused = fuse_with_rgb(concate) ## exchange info between depth and rgb same shape as encode_feature
+            
+            # for i, param in enumerate(self.depth_branch.fuse_with_rgb.parameters()):
+            #     print(f"Parameter {i} values:\n", param.data)
+            # print("in forward depth fused:, fused =", fused)
             encode_feature  = encode_feature + torch.tanh(fused) * encode_feature ## attention gate mechanism by depth
             fuse_branch.append(encode_feature)
+            # print(f"Layer {id} - Fused Max: {fused.abs().max().item()}")
+            # assert torch.abs(encode_feature - all_encoder_features[id]).sum() < 1e-4
 
         x2_t, x3_t, x4_t = fuse_branch
+        # print("x2_t.min, max = ", x2_t.min(), x2_t.max())
+        # print("x3_t.min, max = ", x3_t.min(), x3_t.max())
+        # print("x4_t.min, max = ", x4_t.min(), x4_t.max())
 
         # CFM
         cfm_feature = self.polyp_pvt.CFM(x4_t, x3_t, x2_t)
@@ -312,13 +368,28 @@ class DepthFusePolypPVT(nn.Module):
         prediction2_8 = F.interpolate(prediction2, scale_factor=8, mode='bilinear')  
         return prediction1_8, prediction2_8
 
-
-
 if __name__ == '__main__':
-    # model = PolypPVT().cuda()
-    model = DepthFusePolypPVT().cuda()
-    input_tensor = torch.randn(1, 3, 352, 352).cuda()
+    device = 'cpu'
+    trained_polypPVT_path = '../model_pth/PolypPVT/PolypPVT.pth'
+    
+    # 1. Khởi tạo model gốc trước
+    org_polyp_model = PolypPVT().to(device)
+    org_polyp_model.load_state_dict(torch.load(trained_polypPVT_path, map_location=device))
+    org_polyp_model.eval()
 
-    prediction1, prediction2 = model(input_tensor)
-    print(prediction1.size(), prediction2.size())
+    # 2. Khởi tạo model Fusion
+    model = DepthFusePolypPVT().to(device)
+    # THAY VÌ load file, hãy copy trực tiếp state_dict từ model gốc sang
+    model.polyp_pvt.load_state_dict(org_polyp_model.state_dict())
+    model.depth_initialize() # Khóa depth về 0
+    model.eval()
 
+    img = torch.randn(1, 3, 352, 352)
+    depth = torch.randn(1, 3, 352, 352)
+
+    with torch.no_grad():
+        p1, p2 = model(img, depth)
+        p1_orig, p2_orig = org_polyp_model(img)
+
+    diff = torch.abs(p1 - p1_orig).max()
+    # print(f"Sự khác biệt cuối cùng: {diff.item()}")

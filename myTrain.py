@@ -67,12 +67,16 @@ def test(model, path, dataset, device='cuda'):
 
 
 
-def depthfusion_train(depth_augment_train_loader, model, optimizer, epoch, test_path, device='cuda'):
+def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, optimizer, epoch, test_path, device='cuda', freeze_first=2):
     model.train()
+    model.freeze_pvt(True)
+
     global best
     size_rates = [0.75, 1, 1.25] 
     loss_P2_record = AvgMeter()
     for i, pack in enumerate(depth_augment_train_loader, start=1):
+        if i > freeze_first:
+            model.freeze_pvt(False)
         for rate in size_rates:
             optimizer.zero_grad()
             # ---- data prepare ----
@@ -98,6 +102,8 @@ def depthfusion_train(depth_augment_train_loader, model, optimizer, epoch, test_
             # ---- backward ----
             loss.backward()
             clip_gradient(optimizer, opt.clip)
+            
+            
             optimizer.step()
             # ---- recording loss ----
             if rate == 1:
