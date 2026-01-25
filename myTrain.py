@@ -247,7 +247,7 @@ if __name__ == '__main__':
     depth_root = '{}/depths/'.format(opt.train_path)
 
 
-    train_loader = get_depth_augment_loader(image_root, depth_root, gt_root, num_workers=1, batchsize=opt.batchsize, trainsize=opt.trainsize,
+    train_loader = get_depth_augment_loader(image_root, depth_root, gt_root, batchsize=opt.batchsize, trainsize=opt.trainsize,
                               augmentation=opt.augmentation)
     total_step = len(train_loader)
 
