@@ -134,7 +134,7 @@ class test_dataset:
 
     def load_data(self):
         image = rgb_loader(self.images[self.index])
-        image = self.transform(image).unsqueeze(0)
+        image = self.transform(image).unsqueeze(0) #type: ignore
         gt = binary_loader(self.gts[self.index])
         name = self.images[self.index].split('/')[-1]
         if name.endswith('.jpg'):
@@ -155,9 +155,11 @@ class DepthAugmentPolypDataset(data.Dataset):
         self.images = [image_root + f for f in os.listdir(image_root) if f.endswith('.jpg') or f.endswith('.png')]
         self.depths = [depth_root + f for f in os.listdir(depth_root) if f.endswith('.png')]
         self.gts = [gt_root + f for f in os.listdir(gt_root) if f.endswith('.png')]
+        
         self.images = sorted(self.images)
         self.depths = sorted(self.depths)
         self.gts = sorted(self.gts)
+
         self.filter_files()
         self.size = len(self.images)
         # The rest of the implementation would be similar to PolypDataset,
@@ -253,3 +255,42 @@ def get_depth_augment_loader(image_root, depth_root, gt_root, batchsize, trainsi
                                   num_workers=num_workers,
                                   pin_memory=pin_memory)
     return data_loader
+
+
+class test_depth_enhance_dataset:
+    def __init__(self, image_root, gt_root, depth_root, testsize):
+        self.testsize = testsize
+        self.images = [image_root + f for f in os.listdir(image_root) if f.endswith('.jpg') or f.endswith('.png')]
+        self.gts = [gt_root + f for f in os.listdir(gt_root) if f.endswith('.tif') or f.endswith('.png')]
+        self.depths = [depth_root + f for f in os.listdir(depth_root) if f.endswith('.png')]
+
+        self.images = sorted(self.images)
+        self.gts = sorted(self.gts)
+        self.depths = sorted(self.depths)
+
+        self.transform = transforms.Compose([
+            transforms.Resize((self.testsize, self.testsize)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])])
+        
+        self.gt_transform = transforms.ToTensor()
+        self.size = len(self.images)
+        self.index = 0
+
+    def load_data(self):
+        image = rgb_loader(self.images[self.index])
+        image = self.transform(image).unsqueeze(0) #type: ignore
+
+        depth = rgb_loader(self.depths[self.index])
+        depth = self.transform(depth).unsqueeze(0) #type: ignore
+
+        gt = binary_loader(self.gts[self.index])
+
+        name = self.images[self.index].split('/')[-1]
+
+        if name.endswith('.jpg'):
+            name = name.split('.jpg')[0] + '.png'
+
+        self.index += 1
+        return image, depth, gt, name

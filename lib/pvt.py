@@ -234,6 +234,19 @@ class DepthFusePolypPVT(nn.Module):
         super(DepthFusePolypPVT, self).__init__()
         self.polyp_pvt = PolypPVT(channel)
         self.depth_branch = DepthBranch(channel) 
+        
+        
+        
+    def init_param(self, polyppvt_model_pth=None, total_model_pth=None, device='cuda'):
+        if total_model_pth is not None:
+            self.load_state_dict(torch.load(total_model_pth, map_location=device))
+        elif polyppvt_model_pth is not None:
+            self.polyp_pvt.load_state_dict(torch.load(polyppvt_model_pth, map_location=device))
+            self.depth_initialize()
+        else:
+            self.depth_initialize()
+
+    def depth_initialize(self):
         for m in self.depth_branch.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
