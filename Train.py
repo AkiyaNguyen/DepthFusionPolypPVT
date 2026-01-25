@@ -183,6 +183,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--train_save', type=str,
                         default='./model_pth/'+model_name+'/')
+    parser.add_argument('--base_polyppvt_path', type=str,
+                        default='./model_pth/PolypPVT/PolypPVT.pth', help='path to pre-trained PolypPVT model')
+
     opt = parser.parse_args()
     logging.basicConfig(filename='train_log.log',
                         format='[%(asctime)s-%(filename)s-%(levelname)s:%(message)s]',
@@ -192,6 +195,7 @@ if __name__ == '__main__':
     # torch.cuda.set_device(0)  # set your gpu device
     model = PolypPVT().cuda()
 
+    model.load_state_dict(torch.load(opt.base_polyppvt_path, map_location='cuda'))
 
     best = 0
 
