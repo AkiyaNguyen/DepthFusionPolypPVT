@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from lib.pvtv2 import pvt_v2_b2
+from pvtv2 import pvt_v2_b2
 import os
 import torch
 import torch.nn as nn
@@ -160,7 +160,7 @@ class PolypPVT(nn.Module):
         super(PolypPVT, self).__init__()
 
         self.backbone = pvt_v2_b2()  # [64, 128, 320, 512]
-        path = './pretrained_pth/pvt_v2_b2.pth' # convert to relative path
+        path = '../pretrained_pth/pvt_v2_b2.pth' # convert to relative path
         save_model = torch.load(path)
         model_dict = self.backbone.state_dict()
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
@@ -257,35 +257,19 @@ class DepthBranch(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None: nn.init.constant_(m.bias, 0)
 
-        # 2. Khởi tạo conv3x3s (Tránh việc tạo ra giá trị quá lớn)
         for m in self.conv3x3s:
             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             if m.bias is not None: nn.init.constant_(m.bias, 0)
 
-        # 3. QUAN TRỌNG NHẤT: Ép các lớp Fusion về 0 tuyệt đối
-        # NOTE: Even with zero fusion weights, depth is still processed through
-        # conv1block and conv3x3s (which have non-zero weights). This processing
-        # can introduce numerical differences between DepthFusePolypPVT and PolypPVT
-        # even when fusion weights are zero, especially with real depth data vs random noise.
         for m in self.fuse_with_rgb:
             nn.init.zeros_(m.weight) # Dùng zeros_ cho chắc chắn
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
                
 class DepthFusePolypPVT(nn.Module):
-    def __init__(self, channel=32, polyp_pvt_model=None):
-        """
-        Args:
-            channel: Channel dimension
-            polyp_pvt_model: Optional pre-initialized PolypPVT model to use.
-                            If None, creates a new one.
-        """
+    def __init__(self, channel=32):
         super(DepthFusePolypPVT, self).__init__()
-        if polyp_pvt_model is not None:
-            # Use the provided model directly (share the same backbone instance)
-            self.polyp_pvt = polyp_pvt_model
-        else:
-            self.polyp_pvt = PolypPVT(channel)
+        self.polyp_pvt = PolypPVT(channel)
         self.depth_branch = DepthBranch(channel) 
         
         
@@ -308,19 +292,6 @@ class DepthFusePolypPVT(nn.Module):
             self.polyp_pvt.load_state_dict(torch.load(polyppvt_model_pth, map_location=device))
 
     def forward(self, x, depth):
-        # Check if all fusion weights are zero (initialization state)
-        # If so, bypass depth processing entirely to ensure identical behavior to PolypPVT
-        all_fusion_zero = all(
-            fuse_layer.weight.abs().sum().item() < 1e-8 
-            for fuse_layer in self.depth_branch.fuse_with_rgb
-        )
-        
-        if all_fusion_zero:
-            # Fusion weights are zero, bypass depth processing completely
-            # This ensures 100% identical behavior to PolypPVT
-            return self.polyp_pvt(x)
-        
-        # Normal depth fusion forward
         # backbone
         
         # print("x min and max is: ",x.min(), x.max())
@@ -368,17 +339,8 @@ class DepthFusePolypPVT(nn.Module):
             # for i, param in enumerate(self.depth_branch.fuse_with_rgb.parameters()):
             #     print(f"Parameter {i} values:\n", param.data)
             # print("in forward depth fused:, fused =", fused)
-            
-            # CRITICAL: Check if fusion weights are truly zero before applying
-            # If all fusion weights are zero, skip the fusion to avoid numerical issues
-            fused_abs_max = fused.abs().max().item()
-            if fused_abs_max < 1e-8:
-                # Fusion weights are effectively zero, don't modify features
-                encode_feature_modified = encode_feature
-            else:
-                encode_feature_modified = encode_feature + torch.tanh(fused) * encode_feature ## attention gate mechanism by depth
-            
-            fuse_branch.append(encode_feature_modified)
+            encode_feature  = encode_feature + torch.tanh(fused) * encode_feature ## attention gate mechanism by depth
+            fuse_branch.append(encode_feature)
             # print(f"Layer {id} - Fused Max: {fused.abs().max().item()}")
             # assert torch.abs(encode_feature - all_encoder_features[id]).sum() < 1e-4
 
@@ -406,24 +368,21 @@ if __name__ == '__main__':
     device = 'cpu'
     trained_polypPVT_path = '../model_pth/PolypPVT/PolypPVT.pth'
     
-    # 1. Khởi tạo model gốc trước
     org_polyp_model = PolypPVT().to(device)
     org_polyp_model.load_state_dict(torch.load(trained_polypPVT_path, map_location=device))
-    org_polyp_model.eval()
+    # org_polyp_model.eval()
 
-    # 2. Khởi tạo model Fusion
     model = DepthFusePolypPVT().to(device)
-    # THAY VÌ load file, hãy copy trực tiếp state_dict từ model gốc sang
     model.polyp_pvt.load_state_dict(org_polyp_model.state_dict())
-    model.depth_initialize() # Khóa depth về 0
     model.eval()
 
-    img = torch.randn(1, 3, 352, 352)
-    depth = torch.randn(1, 3, 352, 352)
+    img = torch.randn(10, 3, 352, 352)
+    depth = torch.randn(10, 3, 352, 352)
 
-    with torch.no_grad():
-        p1, p2 = model(img, depth)
-        p1_orig, p2_orig = org_polyp_model(img)
+    # with torch.no_grad():
+    p1, p2 = model(img, depth)
+    p1_orig, p2_orig = org_polyp_model(img)
 
     diff = torch.abs(p1 - p1_orig).max()
+    print ("diff = ", diff)
     # print(f"Sự khác biệt cuối cùng: {diff.item()}")

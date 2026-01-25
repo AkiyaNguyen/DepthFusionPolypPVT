@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 def structure_loss(pred, mask):
     weit = 1 + 5 * torch.abs(F.avg_pool2d(mask, kernel_size=31, stride=1, padding=15) - mask)
-    wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
+    wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none') 
     wbce = (weit * wbce).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
 
     pred = torch.sigmoid(pred)
@@ -37,7 +37,7 @@ def test(model, path, dataset, device='cuda'):
 
     model.eval()
     num1 = len(os.listdir(gt_root))
-    test_loader = test_depth_enhance_dataset(image_root, depth_root, gt_root, 352)
+    test_loader = test_depth_enhance_dataset(image_root, gt_root, depth_root, 352)
     DSC = 0.0
     for i in range(num1):
         image, depth, gt, name = test_loader.load_data()
@@ -153,10 +153,10 @@ def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, opti
 def plot_train(dict_plot=None, name = None):
     color = ['red', 'lawngreen', 'lime', 'gold', 'm', 'plum', 'blue']
     line = ['-', "--"]
-    for i in range(len(name)):
-        plt.plot(dict_plot[name[i]], label=name[i], color=color[i], linestyle=line[(i + 1) % 2])
+    for i in range(len(name)):  # type: ignore
+        plt.plot(dict_plot[name[i]], label=name[i], color=color[i], linestyle=line[(i + 1) % 2]) # type: ignore
         transfuse = {'CVC-300': 0.902, 'CVC-ClinicDB': 0.918, 'Kvasir': 0.918, 'CVC-ColonDB': 0.773,'ETIS-LaribPolypDB': 0.733, 'test':0.83}
-        plt.axhline(y=transfuse[name[i]], color=color[i], linestyle='-')
+        plt.axhline(y=transfuse[name[i]], color=color[i], linestyle='-') # type: ignore
     plt.xlabel("epoch")
     plt.ylabel("dice")
     plt.title('Train')
@@ -234,9 +234,16 @@ if __name__ == '__main__':
 
     # ---- build models ----
     
-    model = DepthFusePolypPVT()
-    model = model.to(device)
-    model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
+    
+    # model = DepthFusePolypPVT()
+    # model = model.to(device)
+    # model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
+
+    org_polyp_model = PolypPVT().to(device)
+    org_polyp_model.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
+
+    model = DepthFusePolypPVT(polyp_pvt_model=org_polyp_model).to(device)
+
 
     best = 0
 
@@ -260,6 +267,7 @@ if __name__ == '__main__':
             {'params': other_polyppvt_params, 'lr': opt.lr * 0.1}
         ]
 
+    optimizer = None
     if opt.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(params_list, weight_decay=1e-4)
     elif opt.optimizer == 'SGD':
