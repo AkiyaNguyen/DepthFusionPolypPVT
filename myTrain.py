@@ -67,7 +67,7 @@ def test(model, path, dataset, device='cuda'):
 
 
 
-def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, optimizer, epoch, test_path, device='cuda', freeze_first=2):
+def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, optimizer, epoch, test_path, device='cuda'):
     model.train()
     model.freeze_pvt(True)
 
@@ -75,8 +75,6 @@ def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, opti
     size_rates = [0.75, 1, 1.25] 
     loss_P2_record = AvgMeter()
     for i, pack in enumerate(depth_augment_train_loader, start=1):
-        if i > freeze_first:
-            model.freeze_pvt(False)
         for rate in size_rates:
             optimizer.zero_grad()
             # ---- data prepare ----
@@ -102,8 +100,7 @@ def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, opti
             # ---- backward ----
             loss.backward()
             clip_gradient(optimizer, opt.clip)
-            
-            
+             
             optimizer.step()
             # ---- recording loss ----
             if rate == 1:
@@ -217,6 +214,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--total_model_pth', type=str, default=None, help='If specified, load the whole model from this path')
     # parser.add_argument('--polyppvt_model_pth', type=str, default=None, help='If specified, load the PolypPVT part from this path')
+    parser.add_argument("--freeze_pvt_first", type=int, default=2, help='freeze the pvt backbone in first few epochs so that the depth can learn how to integrate itself into the entire network')
+
     opt = parser.parse_args()
 
 
@@ -275,7 +274,11 @@ if __name__ == '__main__':
 
     print("#" * 20, "Start Training", "#" * 20)
 
+    model.freeze_pvt(True)
     for epoch in range(1, opt.epoch):
+        if epoch > opt.freeze_pvt_first:
+            model.freeze_pvt(freeze=False)
+    
         adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
         depthfusion_train(train_loader, model, optimizer, epoch, opt.test_path, device=device)
     
