@@ -82,9 +82,6 @@ def test_between_epoch(model, test_path, epoch):
 
 def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, optimizer, epoch, test_path, device='cuda'):
     save_path = (opt.train_save)
-
-    if epoch == 1:
-        test_between_epoch(model, test_path, epoch)
     model.train()
     # model.freeze_pvt(True)
 
@@ -288,10 +285,10 @@ if __name__ == '__main__':
 
     print("#" * 20, "Start Training", "#" * 20)
 
-    model.freeze_pvt(True)
+    # model.freeze_pvt(True)
     for epoch in range(1, opt.epoch):
-        if epoch > opt.freeze_pvt_first:
-            model.freeze_pvt(freeze=False)
+        # if epoch > opt.freeze_pvt_first:
+        #     model.freeze_pvt(freeze=False)
     
         adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
         depthfusion_train(train_loader, model, optimizer, epoch, opt.test_path, device=device)
