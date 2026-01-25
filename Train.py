@@ -3,8 +3,8 @@ from torch.autograd import Variable
 import os
 import argparse
 from datetime import datetime
-from lib.pvt import PolypPVT, DepthFusePolypPVT
-from utils.dataloader import get_loader, test_dataset, get_depth_augment_loader
+from lib.pvt import PolypPVT
+from utils.dataloader import get_loader, test_dataset
 from utils.utils import clip_gradient, adjust_lr, AvgMeter
 import torch.nn.functional as F
 import numpy as np
@@ -183,11 +183,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--train_save', type=str,
                         default='./model_pth/'+model_name+'/')
-    
-    parser.add_argument('--depth_path', type=str,
-                        default='./dataset/DepthDataset/', ## change this to your depth dataset path
-                        help='path to depth dataset')
-
     opt = parser.parse_args()
     logging.basicConfig(filename='train_log.log',
                         format='[%(asctime)s-%(filename)s-%(levelname)s:%(message)s]',
@@ -195,7 +190,8 @@ if __name__ == '__main__':
 
     # ---- build models ----
     # torch.cuda.set_device(0)  # set your gpu device
-    model = DepthFusePolypPVT().cuda()
+    model = PolypPVT().cuda()
+
 
     best = 0
 
@@ -209,11 +205,9 @@ if __name__ == '__main__':
     print(optimizer)
     image_root = '{}/images/'.format(opt.train_path)
     gt_root = '{}/masks/'.format(opt.train_path)
-    # depth_root = '{}/depths/'.format(opt.train_path)
-    depth_root = opt.depth_path
     
 
-    train_loader = get_depth_augment_loader(image_root, depth_root, gt_root, batchsize=opt.batchsize, trainsize=opt.trainsize,
+    train_loader =get_loader(image_root, gt_root, batchsize=opt.batchsize, trainsize=opt.trainsize,
                               augmentation=opt.augmentation)
     total_step = len(train_loader)
 

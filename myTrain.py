@@ -69,7 +69,7 @@ def test(model, path, dataset, device='cuda'):
 
 def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, optimizer, epoch, test_path, device='cuda'):
     model.train()
-    model.freeze_pvt(True)
+    # model.freeze_pvt(True)
 
     global best
     size_rates = [0.75, 1, 1.25] 
@@ -117,7 +117,7 @@ def depthfusion_train(depth_augment_train_loader, model: DepthFusePolypPVT, opti
         os.makedirs(save_path)
 
     torch.save(model.state_dict(), save_path +str(epoch)+ 'PolypPVT.pth')
-    print("save model to", save_path + str(epoch), 'PolypPVT.pth')
+    print("save model to", save_path + str(epoch)+ 'PolypPVT.pth')
     # choose the best model
     
     global dict_plot
@@ -228,9 +228,16 @@ if __name__ == '__main__':
 
     # ---- build models ----
     # torch.cuda.set_device(0)  # set your gpu device
+    org_polyp_model = PolypPVT().to(device)
+    org_polyp_model.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
+
+
     model = DepthFusePolypPVT()
-    model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
+    # model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
     model.to(device)
+    model.polyp_pvt.load_state_dict(org_polyp_model.state_dict())
+    model.depth_initialize() # Khóa depth về 0
+
     # model.polyp_pvt.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
     
 
