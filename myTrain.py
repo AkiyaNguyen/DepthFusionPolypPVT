@@ -238,13 +238,16 @@ if __name__ == '__main__':
     # model = DepthFusePolypPVT()
     # model = model.to(device)
     # model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
-
-    org_polyp_model = PolypPVT().to(device)
-    org_polyp_model.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
-
-    model = DepthFusePolypPVT(polyp_pvt_model=org_polyp_model).to(device)
-
-
+    model = None
+    if opt.total_model_pth is not None:
+        model = DepthFusePolypPVT().to(device)
+        model.load_state_dict(torch.load(opt.total_model_pth, map_location=device))
+    elif opt.base_polyppvt_path is not None:
+        polyp_pvt_model = PolypPVT().to(device)
+        polyp_pvt_model.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
+        model = DepthFusePolypPVT(polyp_pvt_model=polyp_pvt_model).to(device)
+    else:
+        model = DepthFusePolypPVT().to(device)
     best = 0
 
     params = model.parameters()

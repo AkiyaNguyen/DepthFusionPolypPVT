@@ -294,7 +294,7 @@ class DepthFusePolypPVT(nn.Module):
             if 'depth_branch' in name:
                 param.requires_grad = True
             else:
-                param.requires_grad = False
+                param.requires_grad = not freeze  # Set to False if freeze=True, True if freeze=False
         
         if freeze:
             print("---> Backbone & Decoder: FREEZING")
@@ -308,23 +308,6 @@ class DepthFusePolypPVT(nn.Module):
             self.polyp_pvt.load_state_dict(torch.load(polyppvt_model_pth, map_location=device))
 
     def forward(self, x, depth):
-        # Check if all fusion weights are zero (initialization state)
-        # If so, bypass depth processing entirely to ensure identical behavior to PolypPVT
-        all_fusion_zero = all(
-            fuse_layer.weight.abs().sum().item() < 1e-8 
-            for fuse_layer in self.depth_branch.fuse_with_rgb
-        )
-        
-        if all_fusion_zero:
-            # Fusion weights are zero, bypass depth processing completely
-            # This ensures 100% identical behavior to PolypPVT
-            return self.polyp_pvt(x)
-        
-        # Normal depth fusion forward
-        # backbone
-        
-        # print("x min and max is: ",x.min(), x.max())
-
         depth = self.depth_branch.conv1block(depth)
 
         pvt = self.polyp_pvt.backbone(x)
