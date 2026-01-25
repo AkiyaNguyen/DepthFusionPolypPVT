@@ -249,7 +249,25 @@ class DepthBranch(nn.Module):
         self.fuse_with_rgb: nn.ModuleList = nn.ModuleList([nn.Conv2d(16 + channel, channel, kernel_size=1) for _ in range(3)])
 
         # self.conv1x1s = [nn.Conv2d(channel, channel, kernel_size=1)] * 3
+        self.depth_initialize()
         
+    def depth_initialize(self):
+        for m in self.conv1block.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None: nn.init.constant_(m.bias, 0)
+
+        # 2. Khởi tạo conv3x3s (Tránh việc tạo ra giá trị quá lớn)
+        for m in self.conv3x3s:
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None: nn.init.constant_(m.bias, 0)
+
+        # 3. QUAN TRỌNG NHẤT: Ép các lớp Fusion về 0 tuyệt đối
+        for m in self.fuse_with_rgb:
+            nn.init.zeros_(m.weight) # Dùng zeros_ cho chắc chắn
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+               
 class DepthFusePolypPVT(nn.Module):
     def __init__(self, channel=32):
         super(DepthFusePolypPVT, self).__init__()
@@ -274,27 +292,7 @@ class DepthFusePolypPVT(nn.Module):
             self.load_state_dict(torch.load(total_model_pth, map_location=device))
         elif polyppvt_model_pth is not None:
             self.polyp_pvt.load_state_dict(torch.load(polyppvt_model_pth, map_location=device))
-            self.depth_initialize()
-        else:
-            self.depth_initialize()
 
-    def depth_initialize(self):
-        for m in self.depth_branch.conv1block.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None: nn.init.constant_(m.bias, 0)
-
-        # 2. Khởi tạo conv3x3s (Tránh việc tạo ra giá trị quá lớn)
-        for m in self.depth_branch.conv3x3s:
-            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            if m.bias is not None: nn.init.constant_(m.bias, 0)
-
-        # 3. QUAN TRỌNG NHẤT: Ép các lớp Fusion về 0 tuyệt đối
-        for m in self.depth_branch.fuse_with_rgb:
-            nn.init.zeros_(m.weight) # Dùng zeros_ cho chắc chắn
-            if m.bias is not None:
-                nn.init.zeros_(m.bias)
-                
     def forward(self, x, depth):
         # backbone
         

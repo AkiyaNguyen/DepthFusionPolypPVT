@@ -233,20 +233,10 @@ if __name__ == '__main__':
                         level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S %p')
 
     # ---- build models ----
-    # torch.cuda.set_device(0)  # set your gpu device
-    org_polyp_model = PolypPVT().to(device)
-    org_polyp_model.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
-
-
-    model = DepthFusePolypPVT()
-    # model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
-    model.to(device)
-    model.polyp_pvt.load_state_dict(org_polyp_model.state_dict())
-    model.depth_initialize() # Khóa depth về 0
-
-    # model.polyp_pvt.load_state_dict(torch.load(opt.base_polyppvt_path, map_location=device))
     
-
+    model = DepthFusePolypPVT()
+    model = model.to(device)
+    model.init_param(polyppvt_model_pth=opt.base_polyppvt_path, total_model_pth=opt.total_model_pth, device=device)
 
     best = 0
 
