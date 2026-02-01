@@ -5,6 +5,9 @@ import torchvision.transforms as transforms
 import numpy as np
 import random
 import torch
+import shutil
+import torch.nn.functional as F
+
 
 
 def rgb_loader(path):
@@ -16,7 +19,19 @@ def binary_loader(path):
     with open(path, 'rb') as f:
         img = Image.open(f)
         return img.convert('L')
-        
+
+def gt_to_normalized_numpy(gt: Image.Image) -> np.ndarray:
+    gt = np.asarray(gt, np.float32)
+    gt /= (gt.max() + 1e-8)
+    return gt
+
+def process_output_for_inference(P1, P2, gt: np.ndarray):
+    res = F.upsample(P1+P2, size=gt.shape, mode='bilinear', align_corners=False)
+    res = res.sigmoid().data.cpu().numpy().squeeze()
+    res = (res - res.min()) / (res.max() - res.min() + 1e-8)
+    return res
+## =========== utils functions for loading data ===========
+
 class PolypDataset(data.Dataset):
     """
     dataloader for polyp segmentation tasks
@@ -115,7 +130,6 @@ def get_loader(image_root, gt_root, batchsize, trainsize, shuffle=True, num_work
                                   pin_memory=pin_memory)
     return data_loader
 
-
 class test_dataset:
     def __init__(self, image_root, gt_root, testsize):
         self.testsize = testsize
@@ -141,8 +155,22 @@ class test_dataset:
             name = name.split('.jpg')[0] + '.png'
         self.index += 1
         return image, gt, name
+class dummy_test_dataset(test_dataset):
+    base_dataset_path = '../dataset/TestDataset' ## relative path
+    
+    def __init__(self, img_path_list, gt_path_list, testsize, test_dataset_name: str):
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name), exist_ok=True)
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name, 'images'), exist_ok=True)
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name, 'masks'), exist_ok=True)
+        for img_path, gt_path in zip(img_path_list, gt_path_list):
+            shutil.copy(img_path, os.path.join(self.base_dataset_path, test_dataset_name, 'images', os.path.basename(img_path)))
+            shutil.copy(gt_path, os.path.join(self.base_dataset_path, test_dataset_name, 'masks', os.path.basename(gt_path)))
 
+        image_root = os.path.join(self.base_dataset_path, test_dataset_name, 'images') + '/'
+        gt_root = os.path.join(self.base_dataset_path, test_dataset_name, 'masks') + '/'
+        super().__init__(image_root, gt_root, testsize)
 
+## =========== original dataloader for polyp segmentation tasks ===========
 
 class DepthAugmentPolypDataset(data.Dataset):
     """
@@ -294,3 +322,46 @@ class test_depth_enhance_dataset:
 
         self.index += 1
         return image, depth, gt, name
+
+class dummy_test_depth_enhance_dataset(test_depth_enhance_dataset):
+    base_dataset_path = '../dataset/TestDataset' ## relative path
+    def __init__(self, img_path_list, gt_path_list, depth_path_list, testsize, test_dataset_name: str):
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name), exist_ok=True)
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name, 'images'), exist_ok=True)
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name, 'masks'), exist_ok=True)
+        os.makedirs(os.path.join(self.base_dataset_path, test_dataset_name, 'depths'), exist_ok=True)
+        for img_path, gt_path, depth_path in zip(img_path_list, gt_path_list, depth_path_list):
+            shutil.copy(img_path, os.path.join(self.base_dataset_path, test_dataset_name, 'images', os.path.basename(img_path)))
+            shutil.copy(gt_path, os.path.join(self.base_dataset_path, test_dataset_name, 'masks', os.path.basename(gt_path)))
+            shutil.copy(depth_path, os.path.join(self.base_dataset_path, test_dataset_name, 'depths', os.path.basename(depth_path)))
+        image_root = os.path.join(self.base_dataset_path, test_dataset_name, 'images') + '/'
+        gt_root = os.path.join(self.base_dataset_path, test_dataset_name, 'masks') + '/'
+        depth_root = os.path.join(self.base_dataset_path, test_dataset_name, 'depths') + '/'
+        super().__init__(image_root, gt_root, depth_root, testsize)
+
+## =========== dataloader for polyp segmentation tasks with depth augmentation ===========
+
+if __name__ == '__main__':
+    # test_dataset = test_dataset(image_root='../dataset/TestDataset/Kvasir/images/', 
+    #                             gt_root='../dataset/TestDataset/Kvasir/masks/', testsize=512)
+    # image, gt, name = test_dataset.load_data()
+    # print("shape and type of image: ", image.shape, image.dtype)
+    # print("shape and type of gt: ", gt.size, type(gt))
+    # print("gt mode: ", gt.mode)
+    # ## expected: image of shape (1, 3, H, W) and dtype torch.float32
+    # ## expected: gt of size (H, W) and mode 'L' and type PIL.Image.Image
+
+    ## ===== test dummy_test_dataset and dummy_test_depth_enhance_dataset =====
+    image_path_list = ['../dataset/TestDataset/CVC-ColonDB/images/2.png', '../dataset/TestDataset/CVC-ColonDB/images/3.png']
+    gt_path_list = ['../dataset/TestDataset/CVC-ColonDB/masks/2.png', '../dataset/TestDataset/CVC-ColonDB/masks/3.png']
+    # depth_path_list = ['../dataset/TestDataset/CVC-ColonDB/depths/2.png', '../dataset/TestDataset/CVC-ColonDB/depths/3.png']
+    test_dataset_name = 'dummy'
+    test_dataset = dummy_test_dataset(image_path_list, gt_path_list, testsize=512, test_dataset_name=test_dataset_name)
+    image, gt, name = test_dataset.load_data()
+    print("shape and type of image: ", image.shape, image.dtype)
+    # print("shape and type of depth: ", depth.shape, depth.dtype)
+    print("shape and type of gt: ", gt.size, type(gt))
+    print("name: ", name)
+    ## expeted: image of shape (1, 3, H, W) and dtype torch.float32
+    ## expected: gt of size (H, W) and mode 'L' and type PIL.Image.Image
+    ## expected: name of type stringc
