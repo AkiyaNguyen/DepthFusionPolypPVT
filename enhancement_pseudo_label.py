@@ -32,24 +32,27 @@ def enhance_image(image_np: np.ndarray, option: int) -> np.ndarray:
     """
     Apply enhancement to RGB image (H, W, 3) in uint8 [0, 255].
     Returns enhanced image as numpy array.
+    Aligned with trigger.ipynb: denoise=Gaussian blur, clahe=histogram equalize, unsharp=unsharp mask.
     """
     if option == ENHANCE_NORMAL:
         return image_np.copy()
 
     if option == ENHANCE_DENOISE:
-        return cv2.fastNlMeansDenoisingColored(image_np, None, h=10, hForColorComponents=10, templateWindowSize=7, searchWindowSize=21)
+        # Match trigger.ipynb denoise_tensor: TF.gaussian_blur(kernel_size=(3,3), sigma=(0.5,0.5))
+        return cv2.GaussianBlur(image_np, (3, 3), 0.5)
 
     if option == ENHANCE_CLAHE:
-        lab = cv2.cvtColor(image_np, cv2.COLOR_RGB2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        l = clahe.apply(l)
-        lab = cv2.merge([l, a, b])
-        return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        # Match trigger.ipynb apply_clahe_tensor: TF.equalize (histogram equalization)
+        result = np.zeros_like(image_np)
+        for c in range(3):
+            result[..., c] = cv2.equalizeHist(image_np[..., c])
+        return result
 
     if option == ENHANCE_UNSHARP:
-        gaussian = cv2.GaussianBlur(image_np, (0, 0), 3)
-        return cv2.addWeighted(image_np, 1.5, gaussian, -0.5, 0)
+        # Match trigger.ipynb unsharp_mask_tensor: gaussian_blur(5,5) sigma=1, strength=1.5
+        blurred = cv2.GaussianBlur(image_np.astype(np.float32), (5, 5), 1.0)
+        sharpened = image_np.astype(np.float32) + (image_np.astype(np.float32) - blurred) * 1.5
+        return np.clip(sharpened, 0, 255).astype(np.uint8)
 
     raise ValueError(f"Unknown enhancement option: {option}")
 
