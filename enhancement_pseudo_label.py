@@ -99,6 +99,8 @@ def main():
     parser.add_argument('--testsize', type=int, default=352, help='Input size for model')
     parser.add_argument('--dataset_name', type=str, default=None,
                         help='Name for output JSON (default: extracted from train_dataset path)')
+    parser.add_argument('--pseudo_label_output', type=str, default=None,
+                        help='Full path to save pseudo label JSON. Overrides output_folder+dataset_name when set.')
     opt = parser.parse_args()
 
     device = torch.device(opt.device if torch.cuda.is_available() else 'cpu')
@@ -185,8 +187,12 @@ def main():
         name = get_image_name(img_path)
         pseudo_labels[name] = int(best_option)
 
-    os.makedirs(opt.output_folder, exist_ok=True)
-    out_path = os.path.join(opt.output_folder, f'{output_name}.json')
+    if opt.pseudo_label_output:
+        out_path = opt.pseudo_label_output
+        os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
+    else:
+        os.makedirs(opt.output_folder, exist_ok=True)
+        out_path = os.path.join(opt.output_folder, f'{output_name}.json')
     with open(out_path, 'w') as f:
         json.dump(pseudo_labels, f, indent=2)
 

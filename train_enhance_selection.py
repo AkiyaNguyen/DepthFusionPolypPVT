@@ -127,8 +127,9 @@ def main():
                         help='Path to train dataset root (images/ subdir or direct image folder)')
     parser.add_argument('--output_folder', type=str, default='./model_pth/EnhanceSelector/',
                         help='Folder to save checkpoints')
-    parser.add_argument('--pseudo_label_json', type=str, default=None,
-                        help='Path to pseudo label JSON (default: {train_dataset}/TrainDataset.json)')
+    parser.add_argument('--pseudo_label_json', '--pseudo_label_path', type=str, default=None, dest='pseudo_label_json',
+                        help='Path to pseudo label JSON file. Can be any location (not tied to dataset dir). '
+                             'If not set, falls back to {train_dataset}/TrainDataset.json or pseudo_label_enhancement.json')
     parser.add_argument('--device', type=str, default='cuda', choices=['cuda', 'cpu'])
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=16)
