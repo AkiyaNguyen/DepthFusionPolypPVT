@@ -14,7 +14,7 @@ from torchvision import transforms
 from torchvision.models import mobilenet_v3_small
 from PIL import Image
 
-NUM_CLASSES = 4  # 0=normal, 1=denoise, 2=clahe, 3=unsharp
+NUM_CLASSES = 2  # 0=normal, 1=denoise
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
