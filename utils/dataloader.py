@@ -1,4 +1,5 @@
 import os
+import json
 from PIL import Image
 import torch.utils.data as data
 import torchvision.transforms as transforms
@@ -118,6 +119,50 @@ class PolypDataset(data.Dataset):
 
     def __len__(self):
         return self.size
+
+
+class PolypDatasetWithAugmentImage(PolypDataset):
+    """
+    Dataset for enhancement selection: inherits from PolypDataset.
+    Returns (image, enhance_label) where enhance_label is 0=normal, 1=denoise.
+    Requires pseudo_label_json_path: JSON file with {image_name: 0|1}.
+    """
+
+    def __init__(self, image_root, gt_root, trainsize, augmentations, pseudo_label_json_path):
+        super().__init__(image_root, gt_root, trainsize, augmentations)
+        self.pseudo_label_json_path = pseudo_label_json_path
+        with open(pseudo_label_json_path, 'r') as f:
+            pseudo_labels = json.load(f)
+        pseudo_labels = {k: int(v) for k, v in pseudo_labels.items()}
+
+        def get_canonical(path):
+            name = os.path.basename(path)
+            if name.lower().endswith('.jpg'):
+                return name[:-4] + '.png'
+            return name
+
+        filtered_images = []
+        filtered_gts = []
+        self.enhance_labels = []
+        for img_path, gt_path in zip(self.images, self.gts):
+            canonical = get_canonical(img_path)
+            if canonical in pseudo_labels:
+                filtered_images.append(img_path)
+                filtered_gts.append(gt_path)
+                self.enhance_labels.append(pseudo_labels[canonical])
+
+        self.images = filtered_images
+        self.gts = filtered_gts
+        self.size = len(self.images)
+
+    def __getitem__(self, index):
+        image = rgb_loader(self.images[index])
+        seed = np.random.randint(2147483647)
+        random.seed(seed)
+        torch.manual_seed(seed)
+        if self.img_transform is not None:
+            image = self.img_transform(image)
+        return image, self.enhance_labels[index]
 
 
 def get_loader(image_root, gt_root, batchsize, trainsize, shuffle=True, num_workers=4, pin_memory=True, augmentation=False):

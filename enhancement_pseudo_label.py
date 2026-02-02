@@ -81,7 +81,7 @@ def main():
 
     test_loader = test_depth_enhance_dataset(image_root, gt_root, depth_root, opt.testsize)
     better_dice_candidate_id = []
-    for _ in tqdm(range(1)):
+    for _ in tqdm(range(test_loader.size)):
         image, depth, gt, name = test_loader.load_data()
         image = image.to(device) ## already tensor
         depth = depth.to(device)
