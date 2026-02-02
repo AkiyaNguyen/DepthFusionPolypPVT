@@ -55,7 +55,7 @@ def main():
     parser = argparse.ArgumentParser(description='Create enhancement pseudo labels for training dataset')
     parser.add_argument('--train_dataset', type=str, default='./dataset/TrainDataset/',
                         help='Path to train dataset root (with images/, masks/, depths/ subdirs)')
-    parser.add_argument('--output_folder', type=str, default='./dataset/TrainDataset/',
+    parser.add_argument('--output_folder', type=str, default='output/',
                         help='Folder to save pseudo label JSON files')
     parser.add_argument('--model_pth', type=str, default='./model_pth/DepthFusion/depthFusion.pth',
                         help='Path to DepthFusePolypPVT model weights')
@@ -66,7 +66,7 @@ def main():
     parser.add_argument('--testsize', type=int, default=352, help='Input size for model')
     parser.add_argument('--dataset_name', type=str, default=None,
                         help='Name for output JSON (default: extracted from train_dataset path)')
-    parser.add_argument('--pseudo_label_output', type=str, default=None,
+    parser.add_argument('--pseudo_label_output', type=str, default='pseudo_label.json',
                         help='Full path to save pseudo label JSON. Overrides output_folder+dataset_name when set.')
     opt = parser.parse_args()
 
@@ -81,7 +81,7 @@ def main():
 
     test_loader = test_depth_enhance_dataset(image_root, gt_root, depth_root, opt.testsize)
     better_dice_candidate_id = []
-    for _ in tqdm(range(test_loader.size)):
+    for _ in tqdm(range(1)):
         image, depth, gt, name = test_loader.load_data()
         image = image.to(device) ## already tensor
         depth = depth.to(device)
@@ -107,9 +107,10 @@ def main():
             denoise_exceed += 1
     print(f"Normal exceed: {normal_exceed}, Denoise exceed: {denoise_exceed}")
     print(f"Total: {len(better_dice_candidate_id)}")
-    with open(opt.pseudo_label_output, 'w') as f:
-        better_dice_candidate_id_dict = {id[0]: id[1] for id in better_dice_candidate_id}
-        json.dump(better_dice_candidate_id_dict, f)
+    os.makedirs(opt.output_folder, exist_ok=True)
+    with open(os.path.join(opt.output_folder, opt.pseudo_label_output), 'w') as f:
+        better_dice_candidate_id_dict = {str(id[0]): int(id[1]) for id in better_dice_candidate_id}
+        json.dump(better_dice_candidate_id_dict, f, indent=4)
 
 if __name__ == '__main__':
     main()
