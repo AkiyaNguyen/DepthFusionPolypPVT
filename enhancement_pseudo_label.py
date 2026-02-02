@@ -108,7 +108,8 @@ def main():
     print(f"Normal exceed: {normal_exceed}, Denoise exceed: {denoise_exceed}")
     print(f"Total: {len(better_dice_candidate_id)}")
     with open(opt.pseudo_label_output, 'w') as f:
-        json.dump(better_dice_candidate_id, f)
+        better_dice_candidate_id_dict = {id[0]: id[1] for id in better_dice_candidate_id}
+        json.dump(better_dice_candidate_id_dict, f)
 
 if __name__ == '__main__':
     main()
